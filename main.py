@@ -16,7 +16,9 @@ app.add_middleware(
 @app.post("/upload")
 async def upload_csv(file: UploadFile):
     df = pd.read_csv(file.file)
-    df['BPM'] = df['Track name'].apply(fetch_bpm)
+    meta = df['Track name'].apply(fetch_bpm).apply(pd.Series)
+df = pd.concat([df, meta], axis=1)
+df['BPM Found'] = df['BPM'].apply(lambda x: 'Yes' if pd.notna(x) else 'No')
     output_path = "/tmp/output.csv"
     df.to_csv(output_path, index=False)
     return FileResponse(output_path, filename="library_with_bpm.csv")
