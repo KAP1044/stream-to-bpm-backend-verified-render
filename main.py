@@ -20,3 +20,8 @@ async def upload_csv(file: UploadFile):
     output_path = "/tmp/output.csv"
     df.to_csv(output_path, index=False)
     return FileResponse(output_path, filename="library_with_bpm.csv")
+
+
+@app.get("/")
+def root():
+    return {"message": "Stream-to-BPM backend is running."}
