@@ -15,8 +15,13 @@ def get_access_token():
     data = {
         "grant_type": "client_credentials"
     }
-    resp = requests.post("https://accounts.spotify.com/api/token", headers=headers, data=data)
-    return resp.json().get("access_token")
+    try:
+        resp = requests.post("https://accounts.spotify.com/api/token", headers=headers, data=data)
+        resp.raise_for_status()
+        return resp.json().get("access_token")
+    except Exception as e:
+        print(f"[Auth Error] Failed to get token: {e}")
+        return None
 
 def search_track(track_name, token):
     headers = {
@@ -27,22 +32,62 @@ def search_track(track_name, token):
         "type": "track",
         "limit": 1
     }
-    resp = requests.get("https://api.spotify.com/v1/search", headers=headers, params=params)
-    items = resp.json().get("tracks", {}).get("items", [])
-    return items[0]["id"] if items else None
+    try:
+        resp = requests.get("https://api.spotify.com/v1/search", headers=headers, params=params)
+        resp.raise_for_status()
+        items = resp.json().get("tracks", {}).get("items", [])
+        if not items:
+            print(f"[Not Found] No track match for: '{track_name}'")
+        return items[0] if items else None
+    except Exception as e:
+        print(f"[Search Error] '{track_name}' → {e}")
+        return None
 
-def get_bpm(track_id, token):
+def get_audio_features(track_id, token):
     headers = {
         "Authorization": f"Bearer {token}"
     }
-    resp = requests.get(f"https://api.spotify.com/v1/audio-features/{track_id}", headers=headers)
-    return int(resp.json().get("tempo")) if resp.ok else None
+    try:
+        resp = requests.get(f"https://api.spotify.com/v1/audio-features/{track_id}", headers=headers)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        print(f"[Feature Error] Track ID '{track_id}' → {e}")
+        return None
 
 def fetch_bpm(track_name):
     token = get_access_token()
     if not token:
-        return None
-    track_id = search_track(track_name, token)
-    if not track_id:
-        return None
-    return get_bpm(track_id, token)
+        print(f"[Fallback] No token. Skipping '{track_name}'")
+        return {
+            "BPM": None,
+            "Match Name": None,
+            "Match Artist": None,
+            "Key": None,
+            "Energy": None
+        }
+    track_data = search_track(track_name, token)
+    if not track_data:
+        return {
+            "BPM": None,
+            "Match Name": None,
+            "Match Artist": None,
+            "Key": None,
+            "Energy": None
+        }
+    features = get_audio_features(track_data["id"], token)
+    if not features:
+        return {
+            "BPM": None,
+            "Match Name": track_data["name"],
+            "Match Artist": track_data["artists"][0]["name"],
+            "Key": None,
+            "Energy": None
+        }
+    return {
+        "BPM": int(features.get("tempo")),
+        "Match Name": track_data["name"],
+        "Match Artist": track_data["artists"][0]["name"],
+        "Key": features.get("key"),
+        "Energy": features.get("energy")
+    }
